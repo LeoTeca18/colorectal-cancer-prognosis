@@ -1,9 +1,0 @@
-ID_REF,Age,Gender,Dukes Stage,Location,AdjRadio,AdjChem,AFFX-r2-Ec-bioB-5_at,AFFX-r2-Ec-bioC-3_at,AFFX-r2-Ec-bioD-5_at
-PAT_001,65,Male,B,Colon,0,1,7.42,9.15,8.12
-PAT_002,48,Female,A,Rectum,1,0,8.15,9.40,8.90
-PAT_003,72,Male,C,Left,1,1,6.89,8.71,7.56
-PAT_004,59,Female,D,Right,0,1,9.02,10.12,9.75
-PAT_005,52,Male,A,Colon,0,0,8.45,9.80,8.23
-PAT_006,68,Female,C,Rectum,1,0,7.11,8.95,7.99
-PAT_007,81,Male,D,Left,0,0,5.80,7.50,6.90
-PAT_008,39,Female,B,Right,0,1,8.90,10.05,9.30

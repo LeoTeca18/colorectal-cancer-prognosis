@@ -34,3 +34,5 @@ class PrognosisResult:
     risk_level: str               # "Baixo", "Médio", "Alto"
     predicted_survival_months: float
     details: str                  # Explicação textual ou observações adicionais
+    explanation: list = field(default_factory=list)
+

@@ -47,7 +47,7 @@ def render_patient_form(service: PrognosisService):
             with col_t2:
                 adj_radio = st.checkbox("Radioterapia", value=False, help="O paciente recebeu radioterapia complementar pós-cirúrgica.")
                 
-        submitted = st.form_submit_button("Gerar Prognóstico", use_container_width=True)
+        submitted = st.form_submit_button("Gerar Prognóstico", width="stretch")
         
     if submitted:
         try:
@@ -83,6 +83,10 @@ def render_patient_form(service: PrognosisService):
                 fig = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=result.recurrence_probability * 100,
+                    number={
+                        'suffix': "%",
+                        'font': {'size': 54, 'color': '#000000', 'family': 'Arial Black, Arial, sans-serif'}
+                    },
                     domain={'x': [0, 1], 'y': [0, 1]},
                     title={'text': "Probabilidade de Recorrência", 'font': {'size': 18, 'color': '#FAF9F6'}},
                     gauge={
@@ -108,7 +112,7 @@ def render_patient_form(service: PrognosisService):
                     plot_bgcolor="rgba(0,0,0,0)",
                     font={'color': "#FAF9F6"}
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 
             with res_col2:
                 # Mapeamento estético para cada nível de risco
@@ -145,6 +149,45 @@ def render_patient_form(service: PrognosisService):
                 
             st.markdown("#### 🔍 Explicação e Justificação do Modelo")
             st.info(result.details)
+            
+            if hasattr(result, 'explanation') and result.explanation:
+                st.markdown("#### 🧠 Interpretabilidade Local (XAI - Explicação por LIME)")
+                st.markdown(
+                    "O gráfico abaixo exibe os fatores com maior impacto na predição de recorrência deste paciente. "
+                    "<span style='color:#EF4444; font-weight:bold;'>Barras vermelhas (positivas)</span> indicam fatores que elevam o risco, "
+                    "enquanto <span style='color:#10B981; font-weight:bold;'>barras verdes (negativas)</span> indicam fatores protetores ou redutores de risco.",
+                    unsafe_allow_html=True
+                )
+                
+                # Separar os nomes das variáveis e os pesos e formatar
+                features_names = [item[0].replace('=', ': ') for item in result.explanation]
+                weights = [item[1] for item in result.explanation]
+                
+                # Cores estéticas: Vermelho para impacto positivo, Verde para impacto negativo
+                colors = ["#EF4444" if w > 0 else "#10B981" for w in weights]
+                
+                fig_lime = go.Figure(go.Bar(
+                    x=weights,
+                    y=features_names,
+                    orientation='h',
+                    marker_color=colors,
+                    hovertemplate="Factor: %{y}<br>Impacto: %{x:.4f}<extra></extra>"
+                ))
+                
+                fig_lime.update_layout(
+                    height=280,
+                    margin=dict(l=10, r=10, t=20, b=10),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font={'color': "#FAF9F6"},
+                    xaxis={
+                        'gridcolor': 'rgba(255,255,255,0.05)', 
+                        'tickcolor': '#FAF9F6', 
+                        'title': 'Contribuição/Impacto na Probabilidade'
+                    },
+                    yaxis={'autorange': 'reversed', 'tickcolor': '#FAF9F6'}
+                )
+                st.plotly_chart(fig_lime, width="stretch")
             
         except ValueError as ve:
             st.error(f"⚠️ Erro de Validação: {ve}")

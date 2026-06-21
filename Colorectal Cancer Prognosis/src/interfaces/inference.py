@@ -14,10 +14,3 @@ class IInferenceEngine(ABC):
         Gera uma previsão de prognóstico individual para um paciente.
         """
         pass
-    
-    @abstractmethod
-    def predict_batch(self, patients: List[Patient]) -> List[PrognosisResult]:
-        """
-        Gera previsões de prognóstico em lote para uma lista de pacientes.
-        """
-        pass
