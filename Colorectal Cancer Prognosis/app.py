@@ -9,18 +9,15 @@ st.set_page_config(
 )
 
 # Injeção de dependências e importação dos módulos locais (arquitetura SOLID)
-from src.infrastructure.mock_engine import MockInferenceEngine
-from src.infrastructure.csv_loader import CSVDataLoader
+from src.infrastructure.rf_engine import RandomForestInferenceEngine
 from src.application.prognosis_service import PrognosisService
 from src.ui.patient_form import render_patient_form
-from src.ui.batch_processor import render_batch_processor
 
 # Inicialização dos serviços (Injeção de Dependências - DIP)
 @st.cache_resource
 def init_prognosis_service():
-    engine = MockInferenceEngine()
-    data_loader = CSVDataLoader()
-    return PrognosisService(inference_engine=engine, data_loader=data_loader)
+    engine = RandomForestInferenceEngine()
+    return PrognosisService(inference_engine=engine)
 
 service = init_prognosis_service()
 
@@ -108,25 +105,5 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Painel Lateral para navegação estilizada
-st.sidebar.image("https://img.icons8.com/ios-filled/128/00f2fe/artificial-intelligence.png", width=70)
-st.sidebar.title("Navegação")
-st.sidebar.markdown("Selecione a funcionalidade da interface:")
-
-menu_option = st.sidebar.radio(
-    label="Menu de Opções",
-    options=[
-        "🎯 Prognóstico Individual", 
-        "📁Processamento em Lote (CSV)"
-    ],
-    index=0,
-    label_visibility="collapsed"
-)
-
-
-# Fluxo de roteamento das vistas baseado no menu selecionado
-if "🎯 Prognóstico Individual" in menu_option:
-    render_patient_form(service)
-    
-elif "📁Processamento em Lote (CSV)" in menu_option:
-    render_batch_processor(service)
+# Renderização do formulário principal de prognóstico
+render_patient_form(service)
