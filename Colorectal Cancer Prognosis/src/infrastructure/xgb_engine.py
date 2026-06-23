@@ -7,9 +7,9 @@ from src.interfaces.inference import IInferenceEngine
 from src.infrastructure.preprocessor import ClinicalDataPreprocessor
 from src.infrastructure.explainer import ModelExplainer
 
-class RandomForestInferenceEngine(IInferenceEngine):
+class XGBoostInferenceEngine(IInferenceEngine):
     """
-    Motor de Inferência Real utilizando o classificador Random Forest treinado (SOLID - Single Responsibility Principle).
+    Motor de Inferência Real utilizando o classificador XGBoost treinado.
     Consome o modelo como uma caixa-preta isolada, utilizando as classes de pré-processamento e explicabilidade (LIME).
     """
     
@@ -17,22 +17,22 @@ class RandomForestInferenceEngine(IInferenceEngine):
         if model_path is None:
             # Caminho padrão relativo ao arquivo actual
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.path.join(current_dir, "models", "random_forest_model.pkl")
+            model_path = os.path.join(current_dir, "models", "model_xgboost.pkl")
             
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Ficheiro do modelo Random Forest não encontrado em: {model_path}")
+            raise FileNotFoundError(f"Ficheiro do modelo XGBoost não encontrado em: {model_path}")
             
         self._model = joblib.load(model_path)
         self._preprocessor = ClinicalDataPreprocessor()
         self._explainer = ModelExplainer(self._model, self._preprocessor.feature_names)
 
     def predict(self, patient: Patient) -> PrognosisResult:
-        # 1. Módulo de Entrada e Pré-processamento (IQR Capping, Imputação e Feature Engineering)
+        # 1. Módulo de Entrada e Pré-processamento (IQR Capping, Imputação, Engenharia e Padronização)
         X = self._preprocessor.preprocess_patient(patient)
         
         # 2. Módulo Preditivo: Consumindo o Modelo como Caixa-Preta
-        # predict_proba() para extrair probabilidade de risco do evento DFS (Recorrência)
-        proba_recurrence = self._model.predict_proba(X)[0][1]
+        # predict_proba() para extrair probabilidade de risco do evento DFS (Classe 0 = Recorrência)
+        proba_recurrence = self._model.predict_proba(X)[0][0]
         
         # predict() genérico para obter a predição da classe (0.0 ou 1.0)
         predicted_class = self._model.predict(X)[0]
@@ -68,14 +68,15 @@ class RandomForestInferenceEngine(IInferenceEngine):
             treatment_benefit += 0.05
             
         # Modulação dinâmica do tempo livre de doença baseando-se no predict() e predict_proba()
-        # Se predicted_class for 1.0 (Recorrência), reduzimos o DFS
-        class_factor = 0.45 if predicted_class == 1.0 else 1.0
+        # Se predicted_class for 0.0 (Recorrência), reduzimos o DFS
+        class_factor = 0.45 if predicted_class == 0.0 else 1.0
         predicted_survival = class_factor * ((1.2 - proba_recurrence) * base_survival) - (age_factor * 12.0) + (treatment_benefit * 60.0)
         predicted_survival = max(1.0, min(120.0, predicted_survival))
         
+        class_str = "Recorrência" if predicted_class == 0.0 else "Sem Recorrência"
         details = (
-            f"Previsão gerada pelo motor de inferência real (Random Forest Classifier).\n"
-            f"Probabilidade calculada de recorrência: {proba_recurrence * 100:.1f}%. Classe prevista: {int(predicted_class)}.\n"
+            f"Previsão gerada pelo motor de inferência real (XGBoost Classifier).\n"
+            f"Probabilidade calculada de recorrência: {proba_recurrence * 100:.1f}%. Classe prevista: {int(predicted_class)} ({class_str}).\n"
             f"Factores clínicos de entrada: Dukes Stage {stage}, Localização {patient.location}, "
             f"Idade {patient.age} anos, Terapias Adjuvantes (Quimioterapia: {patient.adj_chem}, Radioterapia: {patient.adj_radio})."
         )

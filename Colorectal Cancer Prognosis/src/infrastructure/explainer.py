@@ -30,11 +30,15 @@ def generate_background_data(n_samples: int = 1000) -> np.ndarray:
 def map_categorical_to_dummies(X_numpy: np.ndarray) -> pd.DataFrame:
     """
     Função de mapeamento interno (One-Hot Encoder do modelo de treino).
-    Converte as 5 variáveis categóricas representadas por inteiros para as 11 colunas binárias que o modelo requer.
+    Converte as 5 variáveis categóricas representadas por inteiros para as 9 colunas que o modelo requer.
     """
     N = X_numpy.shape[0]
     df_out = pd.DataFrame(index=range(N))
-    df_out['Age (in years)'] = X_numpy[:, 0]
+    # Age: standard scale (mean=62.0, std=12.0)
+    df_out['Age (in years)'] = (X_numpy[:, 0] - 62.0) / 12.0
+    # Dukes Stage: standard scale (mean=1.4, std=0.86)
+    df_out['Dukes Stage'] = (X_numpy[:, 4] - 1.4) / 0.86
+    
     df_out['Gender_Male'] = (X_numpy[:, 1] == 1).astype(float)
     df_out['Location_Left'] = (X_numpy[:, 2] == 1).astype(float)
     df_out['Location_Rectum'] = (X_numpy[:, 2] == 2).astype(float)
@@ -42,9 +46,6 @@ def map_categorical_to_dummies(X_numpy: np.ndarray) -> pd.DataFrame:
     df_out['Adjuvant_Strategy_Chem_Only'] = (X_numpy[:, 3] == 1).astype(float)
     df_out['Adjuvant_Strategy_No_Treatment'] = (X_numpy[:, 3] == 2).astype(float)
     df_out['Adjuvant_Strategy_Radio_Only'] = (X_numpy[:, 3] == 3).astype(float)
-    df_out['Dukes Stage_B'] = (X_numpy[:, 4] == 1).astype(float)
-    df_out['Dukes Stage_C'] = (X_numpy[:, 4] == 2).astype(float)
-    df_out['Dukes Stage_D'] = (X_numpy[:, 4] == 3).astype(float)
     return df_out
 
 class ModelExplainer:
@@ -74,7 +75,7 @@ class ModelExplainer:
             feature_names=self.feature_names,
             categorical_features=[1, 2, 3, 4],
             categorical_names=categorical_names,
-            class_names=['Sem Recorrência', 'Recorrência'],
+            class_names=['Recorrência', 'Sem Recorrência'],
             mode='classification',
             random_state=42
         )
@@ -143,13 +144,13 @@ class ModelExplainer:
             df_dummies = map_categorical_to_dummies(X_numpy)
             return self._model.predict_proba(df_dummies)
             
-        # Gerar a explicação local para a classe de Recorrência (índice 1)
+        # Gerar a explicação local para a classe de Recorrência (índice 0)
         exp = self._explainer.explain_instance(
             data_row=patient_row,
             predict_fn=predict_proba_wrapper,
             num_features=5,
-            labels=(1,)
+            labels=(0,)
         )
         
         # Retorna a lista mapeada
-        return exp.as_list(label=1)
+        return exp.as_list(label=0)

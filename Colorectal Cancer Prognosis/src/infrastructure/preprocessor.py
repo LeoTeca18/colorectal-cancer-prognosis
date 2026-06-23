@@ -15,20 +15,18 @@ class ClinicalDataPreprocessor:
         self.median_age = median_age
         self.feature_names = [
             'Age (in years)', 
+            'Dukes Stage', 
             'Gender_Male', 
             'Location_Left', 
             'Location_Rectum', 
             'Location_Right', 
             'Adjuvant_Strategy_Chem_Only', 
             'Adjuvant_Strategy_No_Treatment', 
-            'Adjuvant_Strategy_Radio_Only', 
-            'Dukes Stage_B', 
-            'Dukes Stage_C', 
-            'Dukes Stage_D'
+            'Adjuvant_Strategy_Radio_Only'
         ]
 
     def _preprocess_single_values(self, patient: Patient) -> List[float]:
-        # 1. Imputação e Capping Estatístico (IQR) da Idade
+        # 1. Imputação, Capping Estatístico (IQR) e Padronização (Z-score) da Idade
         age_raw = patient.age
         if age_raw is None or pd.isna(age_raw):
             age_raw = self.median_age
@@ -40,6 +38,7 @@ class ClinicalDataPreprocessor:
         lower_bound = q1 - 1.5 * iqr
         upper_bound = q3 + 1.5 * iqr
         age = max(lower_bound, min(upper_bound, age_raw))
+        age_scaled = (age - 62.0) / 12.0
         
         # 2. Imputação de Género
         gender_raw = patient.gender
@@ -80,27 +79,26 @@ class ClinicalDataPreprocessor:
         no_treatment = 1 if adj_strategy == "No_Treatment" else 0
         radio_only = 1 if adj_strategy == "Radio_Only" else 0
         
-        # 5. Imputação de Dukes Stage
+        # 5. Imputação e Padronização (Z-score) de Dukes Stage
         stage_raw = patient.dukes_stage
         if stage_raw is None or (isinstance(stage_raw, str) and not stage_raw.strip()):
             stage_raw = "Desconhecido"
         stage_norm = str(stage_raw).strip().upper()
-        stage_b = 1 if stage_norm == "B" else 0
-        stage_c = 1 if stage_norm == "C" else 0
-        stage_d = 1 if stage_norm == "D" else 0
+        
+        stage_map = {"A": 0.0, "B": 1.0, "C": 2.0, "D": 3.0}
+        stage_val = stage_map.get(stage_norm, 1.4)
+        stage_scaled = (stage_val - 1.4) / 0.86
         
         return [
-            age, 
+            age_scaled,
+            stage_scaled,
             gender_male,
             loc_left, 
             loc_rectum, 
             loc_right,
             chem_only, 
             no_treatment, 
-            radio_only,
-            stage_b, 
-            stage_c, 
-            stage_d
+            radio_only
         ]
 
     def preprocess_patient(self, patient: Patient) -> pd.DataFrame:

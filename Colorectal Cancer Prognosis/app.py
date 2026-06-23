@@ -9,14 +9,14 @@ st.set_page_config(
 )
 
 # Injeção de dependências e importação dos módulos locais (arquitetura SOLID)
-from src.infrastructure.rf_engine import RandomForestInferenceEngine
+from src.infrastructure.xgb_engine import XGBoostInferenceEngine
 from src.application.prognosis_service import PrognosisService
 from src.ui.patient_form import render_patient_form
 
 # Inicialização dos serviços (Injeção de Dependências - DIP)
 @st.cache_resource
 def init_prognosis_service():
-    engine = RandomForestInferenceEngine()
+    engine = XGBoostInferenceEngine()
     return PrognosisService(inference_engine=engine)
 
 service = init_prognosis_service()
