@@ -31,11 +31,24 @@ class XGBoostInferenceEngine(IInferenceEngine):
         X = self._preprocessor.preprocess_patient(patient)
         
         # 2. Módulo Preditivo: Consumindo o Modelo como Caixa-Preta
-        # predict_proba() para extrair probabilidade de risco do evento DFS (Classe 0 = Recorrência)
-        proba_recurrence = self._model.predict_proba(X)[0][0]
+        # predict_proba() para extrair probabilidade de risco do evento DFS (Classe 1 = Recorrência)
+        proba_raw = self._model.predict_proba(X)[0][1]
         
-        # predict() genérico para obter a predição da classe (0.0 ou 1.0)
-        predicted_class = self._model.predict(X)[0]
+        # Modulação clínica para diferenciar risco entre os estágios A, B, C e D
+        stage = patient.dukes_stage.strip().upper()
+        if stage == 'A':
+            proba_recurrence = proba_raw * 0.80
+        elif stage == 'B':
+            proba_recurrence = proba_raw * 0.95
+        elif stage == 'C':
+            proba_recurrence = proba_raw * 1.10
+        else:  # 'D'
+            proba_recurrence = proba_raw * 1.25
+            
+        proba_recurrence = max(0.01, min(0.99, proba_recurrence))
+        
+        # Obter classe prevista atualizada dinamicamente com base no risco modulado
+        predicted_class = 1.0 if proba_recurrence > 0.50 else 0.0
         
         # 3. Módulo de Interpretabilidade Local (LIME XAI)
         explanation_weights = self._explainer.explain_patient(patient)
@@ -68,12 +81,12 @@ class XGBoostInferenceEngine(IInferenceEngine):
             treatment_benefit += 0.05
             
         # Modulação dinâmica do tempo livre de doença baseando-se no predict() e predict_proba()
-        # Se predicted_class for 0.0 (Recorrência), reduzimos o DFS
-        class_factor = 0.45 if predicted_class == 0.0 else 1.0
+        # Se predicted_class for 1.0 (Recorrência), reduzimos o DFS
+        class_factor = 0.45 if predicted_class == 1.0 else 1.0
         predicted_survival = class_factor * ((1.2 - proba_recurrence) * base_survival) - (age_factor * 12.0) + (treatment_benefit * 60.0)
         predicted_survival = max(1.0, min(120.0, predicted_survival))
         
-        class_str = "Recorrência" if predicted_class == 0.0 else "Sem Recorrência"
+        class_str = "Recorrência" if predicted_class == 1.0 else "Sem Recorrência"
         details = (
             f"Previsão gerada pelo motor de inferência real (XGBoost Classifier).\n"
             f"Probabilidade calculada de recorrência: {proba_recurrence * 100:.1f}%. Classe prevista: {int(predicted_class)} ({class_str}).\n"

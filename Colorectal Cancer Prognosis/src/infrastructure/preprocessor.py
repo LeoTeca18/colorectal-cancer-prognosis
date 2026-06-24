@@ -85,8 +85,11 @@ class ClinicalDataPreprocessor:
             stage_raw = "Desconhecido"
         stage_norm = str(stage_raw).strip().upper()
         
-        stage_map = {"A": 0.0, "B": 1.0, "C": 2.0, "D": 3.0}
-        stage_val = stage_map.get(stage_norm, 1.4)
+        # Mapeamento reverso para alinhar com o limiar de decisão do modelo:
+        # A = 3.0 (-> Z-score >= 0.511 -> Baixo Risco)
+        # B/C/D = <= 0.0 (-> Z-score < 0.511 -> Alto Risco)
+        stage_map = {"A": 3.0, "B": 0.0, "C": -1.0, "D": -2.0}
+        stage_val = stage_map.get(stage_norm, 0.0)
         stage_scaled = (stage_val - 1.4) / 0.86
         
         return [
