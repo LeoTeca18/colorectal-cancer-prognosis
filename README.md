@@ -98,6 +98,7 @@ Certifique-se de que tem o Python 3.12 (ou superior) e o `pip` instalados na sua
 4. **Executar a Aplicação:**
    ```bash
    python app.py
+   streamlit run app.py
    ```
 
 ---
