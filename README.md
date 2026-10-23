@@ -76,55 +76,6 @@ colorectal-cancer-prognosis/
 
 ---
 
-## 📊 Desempenho e Métricas de Validação Clínica
-
-O sistema foi rigorosamente validado utilizando a coorte clínica de referência ($N = 62$ pacientes), abrangendo métricas de classificação de eventos oncológicos e métricas tempo-dependentes de análise de sobrevida.
-
-### 1. Classificador de Risco de Recorrência (`model_xgboost.pkl`)
-
-| Métrica | Valor Obtido | Relevância Médica |
-| :--- | :---: | :--- |
-| **AUC-ROC** | **0.8049** (80.5%) | Excelente capacidade discriminativa na diferenciação de pacientes com e sem risco de recorrência. |
-| **Sensibilidade (Recall Classe 1)** | **97.30%** | **Métrica primordial em CDSS:** O modelo detectou 36 de 37 recorrências, minimizando falsos negativos para apenas 1 caso. |
-| **Acurácia Global** | **82.26%** | Concordância de classificação global em 51 dos 62 prontuários clínicos. |
-| **Precisão (Classe 1)** | **78.26%** | Alta confiabilidade quando o sistema aponta risco de progressão da doença. |
-| **Especificidade (Classe 0)** | **60.00%** | Capacidade de confirmar casos livres de recidiva (15 verdadeiros negativos). |
-| **F1-Score (Classe 1)** | **0.8675** | Equilíbrio ótimo entre sensibilidade e precisão clínica. |
-| **Brier Score (Calibração)** | **0.1769** | Avaliação da precisão probabilística calibrada (valores < 0.20 indicam excelente calibração). |
-| **Log-Loss** | **0.5401** | Penalização reduzida de entropia cruzada em dados tabulares. |
-
-#### Matriz de Confusão do CDSS:
-```text
-                          Predito: Sem Recorrência (0)    Predito: Recorrência (1)
-Real: Sem Recorrência (0)              15 (TN)                         10 (FP)
-Real: Recorrência (1)                   1 (FN)                         36 (TP)
-```
-
----
-
-### 2. Regressor de Sobrevida Livre de Doença (`model_survival.pkl`)
-
-| Métrica | Valor Obtido | Interpretação Clínica |
-| :--- | :---: | :--- |
-| **C-Index de Harrell (Concordância)** | **0.7166** (71.7%) | **Padrão-ouro em Sobrevivência:** Mede se o modelo ordena temporalmente com exatidão os pacientes de maior sobrevida (> 0.70 indica forte acurácia prognóstica). |
-| **MAE (Erro Médio Absoluto)** | **17.14 meses** | Desvio temporal médio em meses em relação ao acompanhamento real dos prontuários. |
-| **RMSE (Raiz do Erro Quadrático)** | **21.60 meses** | Sensibilidade estatística a variações extremas na coorte. |
-| **R² (Coeficiente de Determinação)** | **0.3137** | Capacidade explicativa da variância temporal exclusivamente a partir de dados clínicos basais. |
-
----
-
-### 3. Síntese Comparativa (Evolução Metodológica)
-
-| Critério de Avaliação | Versão Inicial (Com Inversão/Heurísticas) | Versão Atual (CDSS Dual Engine Calibrado) |
-| :--- | :---: | :---: |
-| **AUC-ROC** | ~0.398 *(Invertido)* | **0.805** *(Consistente)* |
-| **C-Index de Sobrevida** | 0.526 *(Aleatório)* | **0.717** *(Forte)* |
-| **Sensibilidade (Recorrência)** | 36.4% | **97.3%** |
-| **Predição de Meses de DFS** | Equação empírica fixa em Python | **Modelo de ML Real (`model_survival.pkl`)** |
-| **Comportamento Biológico** | Multiplicadores manuais artificiais | **Restrições Monotónicas Nativas no XGBoost** |
-
----
-
 ## 📦 Instalação e Execução
 
 ### Pré-requisitos
