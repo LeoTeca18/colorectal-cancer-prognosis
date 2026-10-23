@@ -1,0 +1,17 @@
+{
+    "age_mean": 61.11290322580645,
+    "age_scale": 9.503997187448125,
+    "stage_mean": 1.4516129032258065,
+    "stage_scale": 1.0727928482784446,
+    "feature_names": [
+        "Age (in years)",
+        "Dukes Stage",
+        "Gender_Male",
+        "Location_Left",
+        "Location_Rectum",
+        "Location_Right",
+        "Adjuvant_Strategy_Chem_Only",
+        "Adjuvant_Strategy_No_Treatment",
+        "Adjuvant_Strategy_Radio_Only"
+    ]
+}

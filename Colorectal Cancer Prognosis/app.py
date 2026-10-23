@@ -8,10 +8,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção de dependências e importação dos módulos locais (arquitetura SOLID)
+# Injeção de dependências e importação dos módulos locais (arquitetura SOLID / DDD)
 from src.infrastructure.xgb_engine import XGBoostInferenceEngine
 from src.application.prognosis_service import PrognosisService
 from src.ui.patient_form import render_patient_form
+from src.ui.batch_processor import render_batch_processor
+from src.ui.dashboard import render_dashboard
 
 # Inicialização dos serviços (Injeção de Dependências - DIP)
 @st.cache_resource
@@ -38,7 +40,7 @@ st.markdown(
         background: linear-gradient(135deg, #0b1f3b 0%, #0d324d 50%, #0f4c5c 100%);
         border-radius: 16px;
         border: 1px solid rgba(0, 180, 219, 0.25);
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
         text-align: center;
         box-shadow: 0 10px 25px rgba(13, 50, 77, 0.35);
     }
@@ -80,13 +82,24 @@ st.markdown(
     
     /* Cartões informativos de Glassmorphism */
     .glass-card {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(22, 129, 122, 0.15);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(0, 180, 219, 0.2);
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 1.2rem;
         margin-bottom: 1rem;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        backdrop-filter: blur(5px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(8px);
+    }
+    
+    /* Abas personalizadas */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 12px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 10px 24px;
+        font-weight: 600;
+        border-radius: 8px 8px 0px 0px;
     }
     
     </style>
@@ -98,12 +111,25 @@ st.markdown(
 st.markdown(
     """
     <div class="header-container">
-        <h1 class="main-title">🧬 Colorectal Cancer Prognosis</h1>
-        <div class="sub-title">Motor de Inferência e Análise Predictiva de Recorrência e Sobrevida (DFS)</div>
+        <h1 class="main-title">🧬 Colorectal Cancer Prognosis Engine</h1>
+        <div class="sub-title">Sistema de Suporte à Decisão Clínica (CDSS) • Recorrência e Sobrevida Livre de Doença (DFS)</div>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# Renderização do formulário principal de prognóstico
-render_patient_form(service)
+# Abas de navegação da aplicação
+tab_individual, tab_batch, tab_dashboard = st.tabs([
+    "📋 Prognóstico Individual", 
+    "📁 Triagem em Lote (Batch)", 
+    "📊 Painel Clínico & Métricas"
+])
+
+with tab_individual:
+    render_patient_form(service)
+
+with tab_batch:
+    render_batch_processor(service)
+
+with tab_dashboard:
+    render_dashboard()

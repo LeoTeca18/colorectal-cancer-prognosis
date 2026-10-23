@@ -1,74 +1,43 @@
 import numpy as np
 import pandas as pd
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from lime.lime_tabular import LimeTabularExplainer
 from src.domain.patient import Patient
+from src.infrastructure.preprocessor import ClinicalDataPreprocessor
 
-def generate_background_data(n_samples: int = 1000) -> np.ndarray:
+def generate_background_data(preprocessor: ClinicalDataPreprocessor, n_samples: int = 600) -> np.ndarray:
     """
-    Gera um dataset de base (background) contendo 5 variáveis clínicas estruturadas
-    para calibração e treinamento do explicador LIME.
+    Gera uma base de calibração para o LIME alinhada com as 5 variáveis clínicas estruturadas:
+    0: Idade (normal em torno da média clínica)
+    1: Género (0=Feminino, 1=Masculino)
+    2: Localização (0=Cólon, 1=Esquerdo, 2=Reto, 3=Direito)
+    3: Estratégia Adjuvante (0=Ambas, 1=Apenas Quimio, 2=Sem Tratamento, 3=Apenas Radio)
+    4: Estágio de Dukes (0=A, 1=B, 2=C, 3=D)
     """
     np.random.seed(42)
-    # 0. Idade (Idades normais clínicas de 18 a 90)
-    ages = np.random.normal(62, 12, n_samples).clip(18, 90)
-    
-    # 1. Género (0=Feminino, 1=Masculino)
+    ages = np.random.normal(preprocessor.age_mean, preprocessor.age_scale, n_samples).clip(20, 95)
     genders = np.random.binomial(1, 0.55, n_samples)
-    
-    # 2. Localização (0=Cólon (Geral), 1=Cólon Esquerdo, 2=Reto, 3=Cólon Direito)
-    locs = np.random.choice([0, 1, 2, 3], size=n_samples, p=[0.30, 0.25, 0.25, 0.20])
-    
-    # 3. Tratamento (0=Ambas Terapias, 1=Apenas Quimioterapia, 2=Sem Tratamento, 3=Apenas Radioterapia)
-    adjs = np.random.choice([0, 1, 2, 3], size=n_samples, p=[0.10, 0.35, 0.40, 0.15])
-    
-    # 4. Estágio Dukes (0=A, 1=B, 2=C, 3=D)
-    stages = np.random.choice([0, 1, 2, 3], size=n_samples, p=[0.15, 0.40, 0.35, 0.10])
+    locs = np.random.choice([0, 1, 2, 3], size=n_samples, p=[0.05, 0.35, 0.30, 0.30])
+    adjs = np.random.choice([0, 1, 2, 3], size=n_samples, p=[0.20, 0.30, 0.20, 0.30])
+    stages = np.random.choice([0, 1, 2, 3], size=n_samples, p=[0.25, 0.25, 0.30, 0.20])
     
     return np.column_stack([ages, genders, locs, adjs, stages])
-
-def map_categorical_to_dummies(X_numpy: np.ndarray) -> pd.DataFrame:
-    """
-    Função de mapeamento interno (One-Hot Encoder do modelo de treino).
-    Converte as 5 variáveis categóricas representadas por inteiros para as 9 colunas que o modelo requer.
-    """
-    N = X_numpy.shape[0]
-    df_out = pd.DataFrame(index=range(N))
-    # Age: standard scale (mean=62.0, std=12.0)
-    df_out['Age (in years)'] = (X_numpy[:, 0] - 62.0) / 12.0
-    
-    # Dukes Stage: Mapeamento reverso antes de padronizar (A=3.0, B=0.0, C=-1.0, D=-2.0)
-    stage_ints = X_numpy[:, 4]
-    stage_vals = np.zeros_like(stage_ints, dtype=float)
-    stage_vals[stage_ints == 0] = 3.0
-    stage_vals[stage_ints == 1] = 0.0
-    stage_vals[stage_ints == 2] = -1.0
-    stage_vals[stage_ints == 3] = -2.0
-    df_out['Dukes Stage'] = (stage_vals - 1.4) / 0.86
-    
-    df_out['Gender_Male'] = (X_numpy[:, 1] == 1).astype(float)
-    df_out['Location_Left'] = (X_numpy[:, 2] == 1).astype(float)
-    df_out['Location_Rectum'] = (X_numpy[:, 2] == 2).astype(float)
-    df_out['Location_Right'] = (X_numpy[:, 2] == 3).astype(float)
-    df_out['Adjuvant_Strategy_Chem_Only'] = (X_numpy[:, 3] == 1).astype(float)
-    df_out['Adjuvant_Strategy_No_Treatment'] = (X_numpy[:, 3] == 2).astype(float)
-    df_out['Adjuvant_Strategy_Radio_Only'] = (X_numpy[:, 3] == 3).astype(float)
-    return df_out
 
 class ModelExplainer:
     """
     Componente de Explicabilidade (XAI) baseado em LIME (SOLID - Single Responsibility Principle).
-    Explica previsões individuais indicando a contribuição positiva ou negativa de cada variável clínica consolidada.
+    Explica previsões individuais sem distorções ou compensações artificiais,
+    refletindo fielmente as decisões aprendidas pelo modelo de Machine Learning.
     """
     
-    def __init__(self, model, feature_names: List[str] = None):
+    def __init__(self, model, preprocessor: Optional[ClinicalDataPreprocessor] = None):
         self._model = model
+        self._preprocessor = preprocessor or ClinicalDataPreprocessor()
         self.feature_names = ['Idade', 'Género', 'Localização do Tumor', 'Estratégia Terapêutica', 'Estágio de Dukes']
         
-        # Gerar amostras representativas para calibrar a vizinhança do LIME
-        self._background_data = generate_background_data(1000)
+        # Gerar amostras representativas para calibrar o explicador tabular LIME
+        self._background_data = generate_background_data(self._preprocessor, 600)
         
-        # Dicionários de nomes para as variáveis categóricas
         categorical_names = {
             1: ['Feminino', 'Masculino'],
             2: ['Cólon (Geral)', 'Cólon Esquerdo', 'Reto', 'Cólon Direito'],
@@ -76,7 +45,6 @@ class ModelExplainer:
             4: ['Estágio A', 'Estágio B', 'Estágio C', 'Estágio D']
         }
         
-        # Inicializar o explicador tabular
         self._explainer = LimeTabularExplainer(
             training_data=self._background_data,
             feature_names=self.feature_names,
@@ -87,35 +55,61 @@ class ModelExplainer:
             random_state=42
         )
         
-    def _map_patient_to_categorical_vector(self, patient: Patient) -> np.ndarray:
+    def _map_categorical_to_model_features(self, X_numpy: np.ndarray) -> pd.DataFrame:
         """
-        Converte as propriedades do Patient num vetor numérico de 5 posições de categorias.
+        Converte as 5 variáveis do LIME para o formato exato das 9 colunas esperadas pelo modelo.
         """
-        # 0. Idade
-        age = patient.age if patient.age is not None else 62.0
-        # Capping Estatístico (IQR) da idade
-        q1, q3 = 50.0, 70.0
-        iqr = q3 - q1
-        age = max(q1 - 1.5 * iqr, min(q3 + 1.5 * iqr, age))
+        N = X_numpy.shape[0]
+        df_out = pd.DataFrame(index=range(N))
         
-        # 1. Género (0=Feminino, 1=Masculino)
-        gender_norm = patient.gender.strip().capitalize()
+        # 0. Idade: Padronização Z-score
+        df_out['Age (in years)'] = (X_numpy[:, 0] - self._preprocessor.age_mean) / self._preprocessor.age_scale
+        
+        # 1. Estágio Dukes: Codificação Ordinal Direta (0=A, 1=B, 2=C, 3=D) e Padronização
+        stage_vals = X_numpy[:, 4].astype(float)
+        df_out['Dukes Stage'] = (stage_vals - self._preprocessor.stage_mean) / self._preprocessor.stage_scale
+        
+        # 2. Género
+        df_out['Gender_Male'] = (X_numpy[:, 1] == 1).astype(float)
+        
+        # 3. Localização (0=Colon como base)
+        df_out['Location_Left'] = (X_numpy[:, 2] == 1).astype(float)
+        df_out['Location_Rectum'] = (X_numpy[:, 2] == 2).astype(float)
+        df_out['Location_Right'] = (X_numpy[:, 2] == 3).astype(float)
+        
+        # 4. Estratégia Adjuvante (0=Ambas como base)
+        df_out['Adjuvant_Strategy_Chem_Only'] = (X_numpy[:, 3] == 1).astype(float)
+        df_out['Adjuvant_Strategy_No_Treatment'] = (X_numpy[:, 3] == 2).astype(float)
+        df_out['Adjuvant_Strategy_Radio_Only'] = (X_numpy[:, 3] == 3).astype(float)
+        
+        return df_out[self._preprocessor.feature_names]
+
+    def _map_patient_to_vector(self, patient: Patient) -> np.ndarray:
+        """
+        Converte a entidade Patient num vetor clínico numérico de 5 dimensões.
+        """
+        # Idade com capping
+        age = float(patient.age) if patient.age is not None else self._preprocessor.age_mean
+        age = max(20.0, min(100.0, age))
+        
+        # Género (0=Feminino, 1=Masculino)
+        gender_norm = str(patient.gender).strip().capitalize()
         gender_int = 1 if gender_norm in {"Male", "M", "Masculino"} else 0
         
-        # 2. Localização (0=Colon, 1=Left, 2=Rectum, 3=Right)
-        loc_norm = patient.location.strip().capitalize()
-        if loc_norm == "Left":
+        # Localização (0=Colon, 1=Left, 2=Rectum, 3=Right)
+        loc_norm = str(patient.location).strip().capitalize()
+        if loc_norm in {"Left", "Esquerdo"}:
             loc_int = 1
-        elif loc_norm == "Rectum":
+        elif loc_norm in {"Rectum", "Reto"}:
             loc_int = 2
-        elif loc_norm == "Right":
+        elif loc_norm in {"Right", "Direito"}:
             loc_int = 3
         else:
-            loc_int = 0  # Cólon (Geral)
+            loc_int = 0
             
-        # 3. Adjuvant Strategy (0=Both, 1=Chem_Only, 2=No_Treatment, 3=Radio_Only)
-        adj_chem = patient.adj_chem
-        adj_radio = patient.adj_radio
+        # Estratégia (0=Both, 1=Chem_Only, 2=No_Treatment, 3=Radio_Only)
+        adj_chem = bool(patient.adj_chem)
+        adj_radio = bool(patient.adj_radio)
         if adj_chem and not adj_radio:
             adj_int = 1
         elif not adj_chem and adj_radio:
@@ -123,64 +117,32 @@ class ModelExplainer:
         elif not adj_chem and not adj_radio:
             adj_int = 2
         else:
-            adj_int = 0  # Ambas Terapias / Both
+            adj_int = 0
             
-        # 4. Dukes Stage (0=A, 1=B, 2=C, 3=D)
-        stage_norm = patient.dukes_stage.strip().upper()
-        if stage_norm == "B":
-            stage_int = 1
-        elif stage_norm == "C":
-            stage_int = 2
-        elif stage_norm == "D":
-            stage_int = 3
-        else:
-            stage_int = 0  # Estágio A
-            
+        # Estágio de Dukes (0=A, 1=B, 2=C, 3=D)
+        stage_norm = str(patient.dukes_stage).strip().upper()
+        stage_map = {"A": 0, "B": 1, "C": 2, "D": 3}
+        stage_int = stage_map.get(stage_norm, 1)
+        
         return np.array([age, gender_int, loc_int, adj_int, stage_int])
 
     def explain_patient(self, patient: Patient) -> List[Tuple[str, float]]:
         """
-        Calcula as atribuições de impacto de cada característica clínica para a previsão do paciente.
-        Retorna uma lista de tuplos contendo (caracteristica, peso_impacto).
+        Gera as atribuições de impacto de cada característica clínica para a predição do paciente.
+        Retorna uma lista de tuplos: (característica, peso_impacto).
         """
-        # Obter vetor clínico simplificado
-        patient_row = self._map_patient_to_categorical_vector(patient)
+        patient_row = self._map_patient_to_vector(patient)
         
-        # Wrapper compatível que aceita o array 2D gerado pelas perturbações LIME
-        def predict_proba_wrapper(X_numpy):
-            df_dummies = map_categorical_to_dummies(X_numpy)
-            proba_raw = self._model.predict_proba(df_dummies)
+        def predict_proba_fn(X_numpy):
+            df_features = self._map_categorical_to_model_features(X_numpy)
+            # Predição direta sem adulterações
+            return self._model.predict_proba(df_features)
             
-            proba_modulated = proba_raw.copy()
-            for idx in range(len(df_dummies)):
-                stage_scaled = df_dummies.iloc[idx]['Dukes Stage']
-                stage_val = stage_scaled * 0.86 + 1.4
-                
-                # Modulação clínica para que LIME capture a diferença de risco entre estágios B, C e D
-                if stage_val > 1.5:    # Stage A
-                    factor_recurrence = 0.80
-                elif stage_val > -0.5:  # Stage B
-                    factor_recurrence = 0.95
-                elif stage_val > -1.5:  # Stage C
-                    factor_recurrence = 1.10
-                else:                   # Stage D
-                    factor_recurrence = 1.25
-                    
-                p_rec = proba_raw[idx][1] * factor_recurrence
-                p_rec = max(0.01, min(0.99, p_rec))
-                
-                proba_modulated[idx][1] = p_rec
-                proba_modulated[idx][0] = 1.0 - p_rec
-                
-            return proba_modulated
-            
-        # Gerar a explicação local para a classe de Recorrência (índice 1)
         exp = self._explainer.explain_instance(
             data_row=patient_row,
-            predict_fn=predict_proba_wrapper,
+            predict_fn=predict_proba_fn,
             num_features=5,
             labels=(1,)
         )
         
-        # Retorna a lista mapeada
         return exp.as_list(label=1)

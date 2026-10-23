@@ -85,18 +85,18 @@ def render_patient_form(service: PrognosisService):
                     value=result.recurrence_probability * 100,
                     number={
                         'suffix': "%",
-                        'font': {'size': 54, 'color': '#000000', 'family': 'Arial Black, Arial, sans-serif'}
+                        'font': {'size': 54, 'color': '#38BDF8', 'family': 'Arial Black, Arial, sans-serif'}
                     },
                     domain={'x': [0, 1], 'y': [0, 1]},
                     title={'text': "Probabilidade de Recorrência", 'font': {'size': 18, 'color': '#FAF9F6'}},
                     gauge={
                         'axis': {'range': [0, 100], 'ticksuffix': "%", 'tickcolor': '#FAF9F6'},
-                        'bar': {'color': "#4F46E5"},  # Indigo moderno
+                        'bar': {'color': "#00B4DB"},  # Cyan / Azul Clínico
                         'bgcolor': "rgba(0,0,0,0)",
                         'steps': [
-                            {'range': [0, 30], 'color': "rgba(16, 185, 129, 0.2)"},  # Green
-                            {'range': [30, 65], 'color': "rgba(245, 158, 11, 0.2)"}, # Yellow
-                            {'range': [65, 100], 'color': "rgba(239, 68, 68, 0.2)"}  # Red
+                            {'range': [0, 40], 'color': "rgba(16, 185, 129, 0.25)"},  # Green
+                            {'range': [40, 70], 'color': "rgba(245, 158, 11, 0.25)"}, # Yellow
+                            {'range': [70, 100], 'color': "rgba(239, 68, 68, 0.25)"}  # Red
                         ],
                         'threshold': {
                             'line': {'color': "#EF4444", 'width': 3},

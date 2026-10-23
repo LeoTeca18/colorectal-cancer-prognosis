@@ -1,7 +1,7 @@
 import os
 import joblib
 import pandas as pd
-from typing import List
+from typing import List, Optional
 from src.domain.patient import Patient, PrognosisResult
 from src.interfaces.inference import IInferenceEngine
 from src.infrastructure.preprocessor import ClinicalDataPreprocessor
@@ -9,96 +9,121 @@ from src.infrastructure.explainer import ModelExplainer
 
 class XGBoostInferenceEngine(IInferenceEngine):
     """
-    Motor de Inferência Real utilizando o classificador XGBoost treinado.
-    Consome o modelo como uma caixa-preta isolada, utilizando as classes de pré-processamento e explicabilidade (LIME).
+    Motor de Inferência Baseado em Machine Learning (XGBoost).
+    Combina:
+    1. Modelo de Classificação (XGBClassifier): Estima a probabilidade clínica de recorrência/falha (DFS Event).
+    2. Modelo de Sobrevida (XGBRegressor): Estima a expectativa de tempo livre de doença (DFS em meses).
+    3. Interpretabilidade Local (LIME): Identifica a contribuição de cada fator para o paciente.
     """
     
-    def __init__(self, model_path: str = None):
+    def __init__(self, model_path: Optional[str] = None, survival_model_path: Optional[str] = None):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        models_dir = os.path.join(current_dir, "models")
+        
         if model_path is None:
-            # Caminho padrão relativo ao arquivo actual
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.path.join(current_dir, "models", "model_xgboost.pkl")
+            model_path = os.path.join(models_dir, "model_xgboost.pkl")
+        if survival_model_path is None:
+            survival_model_path = os.path.join(models_dir, "model_survival.pkl")
             
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Ficheiro do modelo XGBoost não encontrado em: {model_path}")
+            raise FileNotFoundError(f"Modelo XGBoost de classificação não encontrado em: {model_path}")
+        if not os.path.exists(survival_model_path):
+            raise FileNotFoundError(f"Modelo XGBoost de sobrevida não encontrado em: {survival_model_path}")
             
         self._model = joblib.load(model_path)
+        self._survival_model = joblib.load(survival_model_path)
         self._preprocessor = ClinicalDataPreprocessor()
-        self._explainer = ModelExplainer(self._model, self._preprocessor.feature_names)
+        self._explainer = ModelExplainer(self._model, self._preprocessor)
 
     def predict(self, patient: Patient) -> PrognosisResult:
-        # 1. Módulo de Entrada e Pré-processamento (IQR Capping, Imputação, Engenharia e Padronização)
+        # 1. Pré-processamento padronizado (Matriz de 9 atributos com normalização e dummies)
         X = self._preprocessor.preprocess_patient(patient)
         
-        # 2. Módulo Preditivo: Consumindo o Modelo como Caixa-Preta
-        # predict_proba() para extrair probabilidade de risco do evento DFS (Classe 1 = Recorrência)
-        proba_raw = self._model.predict_proba(X)[0][1]
-        
-        # Modulação clínica para diferenciar risco entre os estágios A, B, C e D
-        stage = patient.dukes_stage.strip().upper()
-        if stage == 'A':
-            proba_recurrence = proba_raw * 0.80
-        elif stage == 'B':
-            proba_recurrence = proba_raw * 0.95
-        elif stage == 'C':
-            proba_recurrence = proba_raw * 1.10
-        else:  # 'D'
-            proba_recurrence = proba_raw * 1.25
-            
+        # 2. Inferência Pura do Modelo Preditivo (XGBClassifier)
+        # Extrai diretamente a probabilidade da classe 1 (Recorrência de Doença)
+        proba_recurrence = float(self._model.predict_proba(X)[0][1])
         proba_recurrence = max(0.01, min(0.99, proba_recurrence))
         
-        # Obter classe prevista atualizada dinamicamente com base no risco modulado
-        predicted_class = 1.0 if proba_recurrence > 0.50 else 0.0
+        predicted_class = 1.0 if proba_recurrence >= 0.50 else 0.0
         
-        # 3. Módulo de Interpretabilidade Local (LIME XAI)
-        explanation_weights = self._explainer.explain_patient(patient)
-        
-        # Determinar classe de risco baseada no limiar de recorrência clínico
-        if proba_recurrence < 0.30:
+        # Estratificação de Risco Clínico Baseada em Limiares Calibrados
+        if proba_recurrence < 0.40:
             risk = "Baixo"
-        elif proba_recurrence < 0.65:
+        elif proba_recurrence < 0.70:
             risk = "Médio"
         else:
             risk = "Alto"
             
-        # Estimativa de DFS (Disease-Free Survival em meses)
-        stage = patient.dukes_stage.strip().upper()
-        if stage == 'A':
-            base_survival = 96.0
-        elif stage == 'B':
-            base_survival = 72.0
-        elif stage == 'C':
-            base_survival = 48.0
-        else:  # 'D'
-            base_survival = 18.0
-            
-        age_factor = (patient.age - 60) / 100.0
-        
-        treatment_benefit = 0.0
-        if patient.adj_chem:
-            treatment_benefit += 0.08
-        if patient.adj_radio:
-            treatment_benefit += 0.05
-            
-        # Modulação dinâmica do tempo livre de doença baseando-se no predict() e predict_proba()
-        # Se predicted_class for 1.0 (Recorrência), reduzimos o DFS
-        class_factor = 0.45 if predicted_class == 1.0 else 1.0
-        predicted_survival = class_factor * ((1.2 - proba_recurrence) * base_survival) - (age_factor * 12.0) + (treatment_benefit * 60.0)
+        # 3. Inferência do Modelo Real de Sobrevida (XGBRegressor)
+        # Estima a duração esperada de Disease-Free Survival (DFS em meses) a partir dos pesos treinados
+        predicted_survival = float(self._survival_model.predict(X)[0])
         predicted_survival = max(1.0, min(120.0, predicted_survival))
         
-        class_str = "Recorrência" if predicted_class == 1.0 else "Sem Recorrência"
+        # 4. Explicabilidade Clínica Local (LIME)
+        explanation_weights = self._explainer.explain_patient(patient)
+        
+        stage = patient.dukes_stage.strip().upper()
+        class_str = "Recorrência Prevista" if predicted_class == 1.0 else "Livre de Recorrência"
+        
+        adj_desc = []
+        if patient.adj_chem:
+            adj_desc.append("Quimioterapia")
+        if patient.adj_radio:
+            adj_desc.append("Radioterapia")
+        treatment_str = ", ".join(adj_desc) if adj_desc else "Sem Tratamento Adjuvante"
+        
         details = (
-            f"Previsão gerada pelo motor de inferência real (XGBoost Classifier).\n"
-            f"Probabilidade calculada de recorrência: {proba_recurrence * 100:.1f}%. Classe prevista: {int(predicted_class)} ({class_str}).\n"
-            f"Factores clínicos de entrada: Dukes Stage {stage}, Localização {patient.location}, "
-            f"Idade {patient.age} anos, Terapias Adjuvantes (Quimioterapia: {patient.adj_chem}, Radioterapia: {patient.adj_radio})."
+            f"Previsão gerada pelo pipeline de Machine Learning (XGBoost Dual Engine).\n"
+            f"• Probabilidade de Recorrência: {proba_recurrence * 100:.1f}% ({class_str} - Risco {risk}).\n"
+            f"• Expectativa de Sobrevida Livre de Doença (DFS): {predicted_survival:.1f} meses.\n"
+            f"• Parâmetros Clínicos: Estágio de Dukes {stage}, Idade {patient.age} anos, "
+            f"Localização {patient.location}, Terapias: {treatment_str}."
         )
         
         return PrognosisResult(
             patient_id=patient.patient_id,
-            recurrence_probability=round(float(proba_recurrence), 3),
+            recurrence_probability=round(proba_recurrence, 3),
             risk_level=risk,
-            predicted_survival_months=round(float(predicted_survival), 1),
+            predicted_survival_months=round(predicted_survival, 1),
             details=details,
             explanation=explanation_weights
         )
+
+    def predict_batch(self, patients: List[Patient]) -> List[PrognosisResult]:
+        """
+        Processamento vetorizado de inferência em lote para múltiplos pacientes.
+        """
+        if not patients:
+            return []
+            
+        X_batch = self._preprocessor.preprocess_batch(patients)
+        probas = self._model.predict_proba(X_batch)[:, 1]
+        survivals = self._survival_model.predict(X_batch)
+        
+        results = []
+        for i, patient in enumerate(patients):
+            prob = float(max(0.01, min(0.99, probas[i])))
+            surv = float(max(1.0, min(120.0, survivals[i])))
+            
+            if prob < 0.40:
+                risk = "Baixo"
+            elif prob < 0.70:
+                risk = "Médio"
+            else:
+                risk = "Alto"
+                
+            details = (
+                f"Triagem em Lote: Paciente {patient.patient_id} classificado com Risco {risk} "
+                f"(Probabilidade de Recorrência: {prob * 100:.1f}%, DFS estimado: {surv:.1f} meses)."
+            )
+            
+            results.append(PrognosisResult(
+                patient_id=patient.patient_id,
+                recurrence_probability=round(prob, 3),
+                risk_level=risk,
+                predicted_survival_months=round(surv, 1),
+                details=details,
+                explanation=[]
+            ))
+            
+        return results
