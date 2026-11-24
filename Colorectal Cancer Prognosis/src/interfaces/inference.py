@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict, Any
 from src.domain.patient import Patient, PrognosisResult
 
 class IInferenceEngine(ABC):
@@ -19,5 +19,13 @@ class IInferenceEngine(ABC):
     def predict_batch(self, patients: List[Patient]) -> List[PrognosisResult]:
         """
         Gera previsões de prognóstico em lote para múltiplos pacientes.
+        """
+        pass
+
+    @abstractmethod
+    def get_dashboard_analytics(self) -> Dict[str, Any]:
+        """
+        Extrai métricas, estatísticas da coorte, curvas de sobrevida e importância de variáveis
+        diretamente dos artefatos gerados pelo Notebook (modelos .pkl e preprocessor_params.json).
         """
         pass

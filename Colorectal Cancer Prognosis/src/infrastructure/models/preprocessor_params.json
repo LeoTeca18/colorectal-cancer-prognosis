@@ -1,6 +1,8 @@
 {
     "age_mean": 61.11290322580645,
     "age_scale": 9.503997187448125,
+    "age_clip_min": 20.0,
+    "age_clip_max": 100.0,
     "stage_mean": 1.4516129032258065,
     "stage_scale": 1.0727928482784446,
     "feature_names": [
@@ -13,5 +15,68 @@
         "Adjuvant_Strategy_Chem_Only",
         "Adjuvant_Strategy_No_Treatment",
         "Adjuvant_Strategy_Radio_Only"
-    ]
+    ],
+    "cohort_summary": {
+        "total_patients": 62,
+        "recurrence_events": 37,
+        "recurrence_rate_pct": 59.7,
+        "mean_dfs_months": 41.8,
+        "mean_age": 61.1
+    },
+    "model_metrics": {
+        "classifier_roc_auc": 0.8049,
+        "classifier_test_recall": 0.8182,
+        "classifier_test_f1": 0.7826,
+        "survival_c_index": 0.7166,
+        "survival_test_c_index": 0.6955,
+        "survival_test_mae_months": 18.81
+    },
+    "location_epidemiology": [
+        {
+            "Localiza\u00e7\u00e3o": "C\u00f3lon Direito",
+            "Risco M\u00e9dio de Recorr\u00eancia (%)": 45.5,
+            "Casos na Coorte": 22,
+            "DFS M\u00e9dio (Meses)": 46.1
+        },
+        {
+            "Localiza\u00e7\u00e3o": "C\u00f3lon Geral",
+            "Risco M\u00e9dio de Recorr\u00eancia (%)": 50.0,
+            "Casos na Coorte": 2,
+            "DFS M\u00e9dio (Meses)": 44.5
+        },
+        {
+            "Localiza\u00e7\u00e3o": "C\u00f3lon Esquerdo",
+            "Risco M\u00e9dio de Recorr\u00eancia (%)": 60.0,
+            "Casos na Coorte": 20,
+            "DFS M\u00e9dio (Meses)": 35.5
+        },
+        {
+            "Localiza\u00e7\u00e3o": "Reto",
+            "Risco M\u00e9dio de Recorr\u00eancia (%)": 77.8,
+            "Casos na Coorte": 18,
+            "DFS M\u00e9dio (Meses)": 43.1
+        }
+    ],
+    "stage_epidemiology": {
+        "A": {
+            "cases": 16,
+            "recurrence_rate_pct": 62.5,
+            "mean_dfs_months": 50.7
+        },
+        "B": {
+            "cases": 14,
+            "recurrence_rate_pct": 64.3,
+            "mean_dfs_months": 38.2
+        },
+        "C": {
+            "cases": 20,
+            "recurrence_rate_pct": 55.0,
+            "mean_dfs_months": 39.9
+        },
+        "D": {
+            "cases": 12,
+            "recurrence_rate_pct": 58.3,
+            "mean_dfs_months": 37.2
+        }
+    }
 }

@@ -23,8 +23,11 @@ class ClinicalDataPreprocessor:
         if os.path.exists(params_path):
             with open(params_path, "r", encoding="utf-8") as f:
                 params = json.load(f)
+            self.raw_params = params
             self.age_mean = params.get("age_mean", 61.1129)
             self.age_scale = params.get("age_scale", 9.5040)
+            self.age_clip_min = params.get("age_clip_min", 20.0)
+            self.age_clip_max = params.get("age_clip_max", 100.0)
             self.stage_mean = params.get("stage_mean", 1.4516)
             self.stage_scale = params.get("stage_scale", 1.0728)
             self.feature_names = params.get("feature_names", [
@@ -40,8 +43,11 @@ class ClinicalDataPreprocessor:
             ])
         else:
             # Fallback para os valores empíricos calculados na base
+            self.raw_params = {}
             self.age_mean = 61.1129
             self.age_scale = 9.5040
+            self.age_clip_min = 20.0
+            self.age_clip_max = 100.0
             self.stage_mean = 1.4516
             self.stage_scale = 1.0728
             self.feature_names = [
@@ -62,12 +68,8 @@ class ClinicalDataPreprocessor:
         if age_raw is None or pd.isna(age_raw):
             age_raw = self.age_mean
             
-        # Limites IQR clínicos: Q1=50, Q3=70, IQR=20 -> [20, 100]
-        q1, q3 = 50.0, 70.0
-        iqr = q3 - q1
-        lower_bound = q1 - 1.5 * iqr
-        upper_bound = q3 + 1.5 * iqr
-        age = max(lower_bound, min(upper_bound, float(age_raw)))
+        # Limites IQR clínicos carregados dos parâmetros de treino: [20.0, 100.0]
+        age = max(self.age_clip_min, min(self.age_clip_max, float(age_raw)))
         age_scaled = (age - self.age_mean) / self.age_scale
         
         # 2. Codificação Ordinal Direta e Padronização (Z-score) do Dukes Stage

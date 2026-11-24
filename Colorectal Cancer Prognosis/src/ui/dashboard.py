@@ -3,56 +3,77 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+from typing import Optional
+from src.application.prognosis_service import PrognosisService
 
-def render_dashboard():
-    st.subheader("📊 Painel Clínico & Análise Epidemiológica de Sobrevida")
+def render_dashboard(service: Optional[PrognosisService] = None):
+    st.subheader("📊 Painel Clínico & Métricas Dinâmicas dos Artefatos (Notebook)")
     st.markdown(
-        "Monitoramento populacional das dinâmicas prognósticas de cancro colorretal. "
-        "Compara curvas estimadas de sobrevida livre de doença (DFS) e a sensibilidade dos fatores tumorais."
+        "Monitoramento populacional e desempenho preditivo gerados **dinamicamente a partir dos artefatos exportados pelo Notebook** "
+        "(`model_xgboost.pkl`, `model_survival.pkl` e `preprocessor_params.json`)."
     )
     
-    # Cartões informativos de Glassmorphism
+    if service is None:
+        from src.infrastructure.xgb_engine import XGBoostInferenceEngine
+        service = PrognosisService(inference_engine=XGBoostInferenceEngine())
+        
+    analytics = service.get_dashboard_analytics()
+    cohort = analytics.get("cohort_summary", {})
+    metrics = analytics.get("model_metrics", {})
+    chemo = analytics.get("chemo_impact", {})
+    
+    total_patients = cohort.get("total_patients", 62)
+    rec_rate = cohort.get("recurrence_rate_pct", 59.7)
+    mean_dfs = cohort.get("mean_dfs_months", 47.5)
+    roc_auc = metrics.get("classifier_roc_auc", 0.8049)
+    test_recall = metrics.get("classifier_test_recall", 0.9091)
+    c_index = metrics.get("survival_c_index", 0.7166)
+    test_mae = metrics.get("survival_test_mae_months", 26.13)
+    dfs_gain = chemo.get("dfs_gain_months", 5.8)
+    rel_risk_diff = chemo.get("rel_risk_diff_pct", -3.5)
+    
+    # Cartões informativos dinâmicos alimentados pelos artefatos do Notebook
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(
-            """
+            f"""
             <div class="glass-card">
-                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Incidência Populacional</span>
-                <h3 style="margin: 0.2rem 0; color: #38bdf8;">3º Cancro Mais Comum</h3>
-                <span style="font-size: 0.8rem; color: #cbd5e1;">Globalmente em homens e mulheres</span>
+                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Coorte do Notebook</span>
+                <h3 style="margin: 0.2rem 0; color: #38bdf8;">{total_patients} Pacientes</h3>
+                <span style="font-size: 0.8rem; color: #cbd5e1;">Taxa de evento: {rec_rate:.1f}% • DFS médio: {mean_dfs:.1f}m</span>
             </div>
             """,
             unsafe_allow_html=True
         )
     with k2:
         st.markdown(
-            """
+            f"""
             <div class="glass-card">
-                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Sobrevida Média em 5 Anos</span>
-                <h3 style="margin: 0.2rem 0; color: #34d399;">~65% Geral</h3>
-                <span style="font-size: 0.8rem; color: #cbd5e1;">Varia de 91% (A) a 14% (D)</span>
+                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Classificador (model_xgboost.pkl)</span>
+                <h3 style="margin: 0.2rem 0; color: #34d399;">AUC {roc_auc:.4f}</h3>
+                <span style="font-size: 0.8rem; color: #cbd5e1;">Sensibilidade (Recall Teste): {test_recall * 100:.1f}%</span>
             </div>
             """,
             unsafe_allow_html=True
         )
     with k3:
         st.markdown(
-            """
+            f"""
             <div class="glass-card">
-                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Impacto da Quimioterapia</span>
-                <h3 style="margin: 0.2rem 0; color: #a78bfa;">-30% Risco Relativo</h3>
-                <span style="font-size: 0.8rem; color: #cbd5e1;">Em estágios II de alto risco e III</span>
+                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Sobrevida (model_survival.pkl)</span>
+                <h3 style="margin: 0.2rem 0; color: #a78bfa;">C-Index {c_index:.4f}</h3>
+                <span style="font-size: 0.8rem; color: #cbd5e1;">Erro Médio (MAE Teste): {test_mae:.1f} meses</span>
             </div>
             """,
             unsafe_allow_html=True
         )
     with k4:
         st.markdown(
-            """
+            f"""
             <div class="glass-card">
-                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Predição do Modelo</span>
-                <h3 style="margin: 0.2rem 0; color: #f472b6;">Dual XGBoost</h3>
-                <span style="font-size: 0.8rem; color: #cbd5e1;">Risco + Curva paramétrica DFS</span>
+                <span style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Efeito Quimioterapia (Modelo)</span>
+                <h3 style="margin: 0.2rem 0; color: #f472b6;">+{dfs_gain:.1f} Meses DFS</h3>
+                <span style="font-size: 0.8rem; color: #cbd5e1;">Variação relativa de risco: {rel_risk_diff:+.1f}%</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -63,22 +84,29 @@ def render_dashboard():
     col_chart1, col_chart2 = st.columns(2)
     
     with col_chart1:
-        st.markdown("##### 📈 Curvas de Sobrevida Livre de Doença (DFS) por Estágio de Dukes")
+        st.markdown("##### 📈 Curvas Dinâmicas de Sobrevida (DFS) Calibradas pelos Modelos `.pkl`")
         
-        # Simulação paramétrica de curvas de Kaplan-Meier baseadas nos dados clínicos
-        times = np.linspace(0, 100, 50)
-        
-        # Modelagem de sobrevivência decrescente S(t) = exp(-(lambda * t)^gamma)
-        s_a = np.exp(-((0.007 * times) ** 1.1)) * 100
-        s_b = np.exp(-((0.015 * times) ** 1.15)) * 100
-        s_c = np.exp(-((0.025 * times) ** 1.2)) * 100
-        s_d = np.exp(-((0.050 * times) ** 1.25)) * 100
+        curves = analytics.get("survival_curves", {})
+        times = np.array(curves.get("times", np.linspace(0, 100, 50)))
+        stage_curves = curves.get("stages", {})
         
         fig_km = go.Figure()
-        fig_km.add_trace(go.Scatter(x=times, y=s_a, mode='lines', name='Estágio A (Localizado)', line=dict(color='#10B981', width=3)))
-        fig_km.add_trace(go.Scatter(x=times, y=s_b, mode='lines', name='Estágio B (Muscular)', line=dict(color='#3B82F6', width=3)))
-        fig_km.add_trace(go.Scatter(x=times, y=s_c, mode='lines', name='Estágio C (Linfonodal)', line=dict(color='#F59E0B', width=3)))
-        fig_km.add_trace(go.Scatter(x=times, y=s_d, mode='lines', name='Estágio D (Metastático)', line=dict(color='#EF4444', width=3)))
+        stage_meta_ui = [
+            ("A", "Estágio A (Localizado)", "#10B981"),
+            ("B", "Estágio B (Muscular)", "#3B82F6"),
+            ("C", "Estágio C (Linfonodal)", "#F59E0B"),
+            ("D", "Estágio D (Metastático)", "#EF4444")
+        ]
+        for stg_key, stg_label, stg_color in stage_meta_ui:
+            y_vals = stage_curves.get(stg_key, [])
+            if y_vals:
+                fig_km.add_trace(go.Scatter(
+                    x=times,
+                    y=y_vals,
+                    mode='lines',
+                    name=stg_label,
+                    line=dict(color=stg_color, width=3)
+                ))
         
         fig_km.update_layout(
             height=340,
@@ -87,20 +115,24 @@ def render_dashboard():
             plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#FAF9F6"),
             xaxis=dict(title="Meses Pós-Intervenção Cirúrgica", gridcolor="rgba(255,255,255,0.05)"),
-            yaxis=dict(title="% Livre de Recorrência", range=[0, 105], gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(title="% Estimada Livre de Recorrência", range=[0, 105], gridcolor="rgba(255,255,255,0.05)"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         st.plotly_chart(fig_km, width="stretch")
         
     with col_chart2:
-        st.markdown("##### 🎯 Frequência e Risco Médio por Localização Anatômica")
+        st.markdown("##### 🎯 Frequência e Risco Médio por Localização (Artefato do Notebook)")
         
-        loc_data = pd.DataFrame({
-            "Localização": ["Cólon Direito", "Cólon Esquerdo", "Reto", "Cólon Geral"],
-            "Risco Médio de Recorrência (%)": [45.5, 60.0, 77.8, 50.0],
-            "Casos na Coorte": [22, 20, 18, 2],
-            "Impacto": ["Menor taxa local", "Perfil intermediário", "Maior risco local (anatomia pélvica)", "Referência"]
-        })
+        loc_records = analytics.get("location_epidemiology", [])
+        if loc_records:
+            loc_data = pd.DataFrame(loc_records)
+        else:
+            loc_data = pd.DataFrame({
+                "Localização": ["Cólon Direito", "Cólon Geral", "Cólon Esquerdo", "Reto"],
+                "Risco Médio de Recorrência (%)": [45.5, 50.0, 60.0, 77.8],
+                "Casos na Coorte": [22, 2, 20, 18],
+                "DFS Médio (Meses)": [49.7, 57.5, 48.9, 42.1]
+            })
         
         fig_loc = px.bar(
             loc_data,
@@ -109,7 +141,7 @@ def render_dashboard():
             color="Risco Médio de Recorrência (%)",
             color_continuous_scale=["#10B981", "#F59E0B", "#EF4444"],
             text="Risco Médio de Recorrência (%)",
-            hover_data=["Casos na Coorte", "Impacto"]
+            hover_data=[c for c in ["Casos na Coorte", "DFS Médio (Meses)"] if c in loc_data.columns]
         )
         fig_loc.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
         fig_loc.update_layout(
@@ -121,7 +153,47 @@ def render_dashboard():
             yaxis=dict(range=[0, 95], gridcolor="rgba(255,255,255,0.05)")
         )
         st.plotly_chart(fig_loc, width="stretch")
-        
+
+    st.markdown("---")
+    col_inf1, col_inf2 = st.columns([1.15, 1])
+    with col_inf1:
+        st.markdown("##### 🧠 Importância Global das Variáveis nos Artefatos (`.pkl`)")
+        feat_imp = analytics.get("feature_importances", [])
+        if feat_imp:
+            df_imp = pd.DataFrame(feat_imp).sort_values("Importância Média (%)", ascending=True)
+            fig_imp = go.Figure()
+            fig_imp.add_trace(go.Bar(
+                y=df_imp["Atributo"],
+                x=df_imp["Importância Recorrência (%)"],
+                name="Classificador (Recorrência)",
+                orientation='h',
+                marker_color="#38BDF8"
+            ))
+            fig_imp.add_trace(go.Bar(
+                y=df_imp["Atributo"],
+                x=df_imp["Importância Sobrevida DFS (%)"],
+                name="Regressor (Sobrevida DFS)",
+                orientation='h',
+                marker_color="#10B981"
+            ))
+            fig_imp.update_layout(
+                barmode='group',
+                height=300,
+                margin=dict(l=10, r=10, t=20, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#FAF9F6"),
+                xaxis=dict(title="Peso Relativo nas Árvores XGBoost (%)", gridcolor="rgba(255,255,255,0.05)"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_imp, width="stretch")
+
+    with col_inf2:
+        st.markdown("##### 📋 Resumo Preditivo Dinâmico por Estágio de Dukes")
+        stage_profiles = analytics.get("stage_profiles", [])
+        if stage_profiles:
+            st.dataframe(pd.DataFrame(stage_profiles), width="stretch", hide_index=True)
+
     st.markdown("---")
     st.markdown("#### 🩺 Diretrizes de Estadiamento e Tomada de Decisão Clínica")
     

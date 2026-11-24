@@ -17,6 +17,8 @@ Diferente de abordagens tradicionais onde notebooks experimentais são convertid
 
 ```
 colorectal-cancer-prognosis/
+├── Notebook/
+│   └── Colorectal_Cancer_Prognosis.ipynb # Pipeline científico de treino, validação, XAI e geração de artefatos
 └── Colorectal Cancer Prognosis/
     ├── app.py                         # Ponto de entrada da aplicação (Interface Streamlit com abas)
     ├── requirements.txt               # Dependências do ecossistema Python
@@ -24,13 +26,12 @@ colorectal-cancer-prognosis/
         ├── domain/                    # Camada do Domínio (Regras de negócio puras)
         │   └── patient.py             # Entidade "Patient" com validações estritas (idade, género, estágio, localização)
         ├── application/               # Camada de Aplicação (Casos de uso e orquestração)
-        │   └── prognosis_service.py   # Orquestração de inferência individual e em lote (Batch)
+        │   └── prognosis_service.py   # Orquestração de inferência individual, em lote (Batch) e métricas dinâmicas
         ├── infrastructure/            # Camada de Infraestrutura (Detalhes técnicos e ML)
-        │   ├── models/
+        │   ├── models/                # Artefatos gerados pelo Notebook e integrados na interface
         │   │   ├── model_xgboost.pkl  # Classificador XGBoost (Probabilidade de Recorrência)
         │   │   ├── model_survival.pkl # Regressor XGBoost (Sobrevida Livre de Doença em Meses)
-        │   │   ├── preprocessor_params.json # Parâmetros estatísticos de normalização (Z-Score)
-        │   │   └── train_models.py    # Pipeline reprodutível de treino e calibração
+        │   │   └── preprocessor_params.json # Parâmetros de normalização (Z-Score) e métricas dinâmicas da coorte
         │   ├── preprocessor.py        # Pipelines de tratamento, imputação e codificação dummy/ordinal
         │   ├── xgb_engine.py          # Motor de execução dual do XGBoost
         │   └── explainer.py           # Módulo de explicabilidade clínica (LIME XAI)
@@ -39,7 +40,7 @@ colorectal-cancer-prognosis/
         └── ui/                        # Camada de Apresentação Gráfica
             ├── patient_form.py        # Formulário clínico individual com gauge interativo
             ├── batch_processor.py     # Triagem automatizada em lote via ficheiros CSV
-            └── dashboard.py           # Painel epidemiológico e curvas de sobrevida (Kaplan-Meier)
+            └── dashboard.py           # Painel clínico dinâmico e curvas de sobrevida calibradas pelos artefatos
 ```
 
 ### Detalhes das Camadas:

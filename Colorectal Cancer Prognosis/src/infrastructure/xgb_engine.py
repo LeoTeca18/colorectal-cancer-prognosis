@@ -1,7 +1,8 @@
 import os
 import joblib
+import numpy as np
 import pandas as pd
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from src.domain.patient import Patient, PrognosisResult
 from src.interfaces.inference import IInferenceEngine
 from src.infrastructure.preprocessor import ClinicalDataPreprocessor
@@ -127,3 +128,104 @@ class XGBoostInferenceEngine(IInferenceEngine):
             ))
             
         return results
+
+    def get_dashboard_analytics(self) -> Dict[str, Any]:
+        """
+        Constrói dinamicamente todos os indicadores do Painel Clínico a partir dos artefatos
+        exportados pelo Notebook (model_xgboost.pkl, model_survival.pkl e preprocessor_params.json).
+        """
+        params = getattr(self._preprocessor, "raw_params", {}) or {}
+        cohort_summary = params.get("cohort_summary", {})
+        model_metrics = params.get("model_metrics", {})
+        location_epidemiology = params.get("location_epidemiology", [])
+        
+        # 1. Inferência dinâmica por Estágio de Dukes (A, B, C, D) diretamente nos modelos .pkl
+        mean_age = int(round(self._preprocessor.age_mean))
+        stages = ["A", "B", "C", "D"]
+        stage_patients = [
+            Patient(
+                patient_id=f"STAGE-{s}",
+                age=mean_age,
+                gender="Male",
+                dukes_stage=s,
+                location="Colon",
+                adj_radio=False,
+                adj_chem=True
+            )
+            for s in stages
+        ]
+        X_stages = self._preprocessor.preprocess_batch(stage_patients)
+        stage_probs = np.clip(self._model.predict_proba(X_stages)[:, 1], 0.01, 0.99)
+        stage_dfs = np.clip(self._survival_model.predict(X_stages), 1.0, 120.0)
+        
+        # 2. Geração dinâmica das curvas de sobrevida S(t) = exp(-(lambda * t)^gamma)
+        # calibradas diretamente pela mediana/média de meses DFS e probabilidade prevista pelo modelo para cada estágio
+        times = np.linspace(0, 100, 50)
+        survival_curves = {"times": times.tolist(), "stages": {}}
+        stage_profiles = []
+        gammas = {"A": 1.10, "B": 1.15, "C": 1.20, "D": 1.25}
+        stage_Meta = params.get("stage_epidemiology", {})
+        
+        for idx, s in enumerate(stages):
+            pred_prob = float(stage_probs[idx])
+            pred_months = float(stage_dfs[idx])
+            gamma = gammas[s]
+            # Taxa de risco (hazard rate lambda) derivada diretamente da predição dos modelos treinados
+            hazard_lambda = (-np.log(max(0.05, 1.0 - pred_prob))) ** (1.0 / gamma) / max(12.0, pred_months)
+            curve_y = (np.exp(-((hazard_lambda * times) ** gamma)) * 100.0).tolist()
+            survival_curves["stages"][s] = curve_y
+            
+            emp_info = stage_Meta.get(s, {})
+            stage_profiles.append({
+                "Estágio": f"Dukes {s}",
+                "Casos na Coorte": emp_info.get("cases", "-"),
+                "Prob. Recorrência Modelo (%)": round(pred_prob * 100.0, 1),
+                "DFS Previsto Modelo (Meses)": round(pred_months, 1),
+                "DFS Médio Real Coorte (Meses)": emp_info.get("mean_dfs_months", round(pred_months, 1))
+            })
+            
+        # 3. Impacto dinâmico da Quimioterapia Adjuvante calculado pelo Classificador .pkl
+        p_no_treat = Patient("SIM-NT", mean_age, "Male", "C", "Left", False, False)
+        p_chemo = Patient("SIM-CH", mean_age, "Male", "C", "Left", False, True)
+        X_comp = self._preprocessor.preprocess_batch([p_no_treat, p_chemo])
+        probs_comp = self._model.predict_proba(X_comp)[:, 1]
+        dfs_comp = self._survival_model.predict(X_comp)
+        rel_risk_diff_pct = round(((float(probs_comp[1]) - float(probs_comp[0])) / max(0.01, float(probs_comp[0]))) * 100.0, 1)
+        dfs_gain_months = round(float(dfs_comp[1]) - float(dfs_comp[0]), 1)
+        
+        # 4. Importância Global das Variáveis extraída diretamente dos pesos dos modelos .pkl
+        feature_labels = {
+            "Age (in years)": "Idade (Anos)",
+            "Dukes Stage": "Estágio de Dukes",
+            "Gender_Male": "Género (Masculino)",
+            "Location_Left": "Localização: Cólon Esquerdo",
+            "Location_Rectum": "Localização: Reto",
+            "Location_Right": "Localização: Cólon Direito",
+            "Adjuvant_Strategy_Chem_Only": "Terapia: Apenas Quimio",
+            "Adjuvant_Strategy_No_Treatment": "Terapia: Sem Tratamento",
+            "Adjuvant_Strategy_Radio_Only": "Terapia: Apenas Radio"
+        }
+        clf_imp = getattr(self._model, "feature_importances_", np.zeros(len(self._preprocessor.feature_names)))
+        surv_imp = getattr(self._survival_model, "feature_importances_", np.zeros(len(self._preprocessor.feature_names)))
+        feature_importances = []
+        for fname, c_val, s_val in zip(self._preprocessor.feature_names, clf_imp, surv_imp):
+            feature_importances.append({
+                "Atributo": feature_labels.get(fname, fname),
+                "Importância Recorrência (%)": round(float(c_val) * 100.0, 1),
+                "Importância Sobrevida DFS (%)": round(float(s_val) * 100.0, 1),
+                "Importância Média (%)": round((float(c_val) + float(s_val)) * 50.0, 1)
+            })
+        feature_importances.sort(key=lambda x: x["Importância Média (%)"], reverse=True)
+        
+        return {
+            "cohort_summary": cohort_summary,
+            "model_metrics": model_metrics,
+            "location_epidemiology": location_epidemiology,
+            "survival_curves": survival_curves,
+            "stage_profiles": stage_profiles,
+            "chemo_impact": {
+                "rel_risk_diff_pct": rel_risk_diff_pct,
+                "dfs_gain_months": dfs_gain_months
+            },
+            "feature_importances": feature_importances
+        }

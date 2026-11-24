@@ -132,4 +132,4 @@ with tab_batch:
     render_batch_processor(service)
 
 with tab_dashboard:
-    render_dashboard()
+    render_dashboard(service)

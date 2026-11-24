@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any
 from src.domain.patient import Patient, PrognosisResult
 from src.interfaces.inference import IInferenceEngine
 
@@ -22,3 +22,9 @@ class PrognosisService:
         Executa a predição em lote para múltiplos prontuários clínicos.
         """
         return self._inference_engine.predict_batch(patients)
+
+    def get_dashboard_analytics(self) -> Dict[str, Any]:
+        """
+        Obtém os dados analíticos e epidemiológicos dinâmicos provenientes dos artefatos do Notebook.
+        """
+        return self._inference_engine.get_dashboard_analytics()

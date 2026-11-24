@@ -88,9 +88,9 @@ class ModelExplainer:
         """
         Converte a entidade Patient num vetor clínico numérico de 5 dimensões.
         """
-        # Idade com capping
+        # Idade com capping alinhado ao pré-processador
         age = float(patient.age) if patient.age is not None else self._preprocessor.age_mean
-        age = max(20.0, min(100.0, age))
+        age = max(self._preprocessor.age_clip_min, min(self._preprocessor.age_clip_max, age))
         
         # Género (0=Feminino, 1=Masculino)
         gender_norm = str(patient.gender).strip().capitalize()
